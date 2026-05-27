@@ -76,19 +76,34 @@ Railway will redeploy automatically.
 
 ---
 
-## Step 5 — Set the environment variable
+## Step 5 — Set the environment variables
 
 1. Still in your service, go to the **Variables** tab
-2. Click **+ New Variable** (or **Raw Editor**)
-3. Add:
+2. Click **Raw Editor** (easiest)
+3. Paste all 3 variables at once:
 
    ```
    DATA_DIR=/data
+   AUTH_USERNAME=Hakim323
+   AUTH_PASSWORD=Gunkilwa8.@Maeve
    ```
 
-4. Click **Add** / **Save**
+4. Click **Update Variables** / **Save**
 
 Railway will redeploy once more.
+
+> 🔐 **About the login:** The `/manager` area and all manager APIs are
+> protected by HTTP Basic Auth. When you visit `https://yoururl/manager`,
+> your browser will prompt you for the username and password. The creator
+> submission pages (`/c/<slug>`) stay completely public — your creators
+> never see a login prompt.
+>
+> **You can change `AUTH_USERNAME` and `AUTH_PASSWORD` anytime** from the
+> Railway dashboard — no code change needed. After updating, Railway
+> redeploys automatically (~30 seconds) and the new credentials take effect.
+>
+> 💡 If you ever forget your password, just go to Railway → Variables and
+> reset it.
 
 ---
 

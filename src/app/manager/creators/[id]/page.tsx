@@ -143,6 +143,13 @@ export default function CreatorDetailPage() {
             >
               ← Back
             </Link>
+            <a
+              href="/api/logout"
+              className="text-xs text-slate-500 hover:text-orange-600 transition-colors font-medium"
+              title="Sign out"
+            >
+              Sign out
+            </a>
           </div>
         </div>
       </header>

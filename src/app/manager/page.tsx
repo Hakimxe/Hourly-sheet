@@ -149,12 +149,21 @@ export default function ManagerPage() {
       <header className="border-b border-orange-100 bg-white/80 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Logo size="md" />
-          <div className="text-xs text-slate-500 hidden sm:flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>
-              Logged in as{" "}
-              <span className="text-slate-900 font-medium">Manager</span>
+          <div className="text-xs text-slate-500 flex items-center gap-3">
+            <span className="hidden sm:flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>
+                Logged in as{" "}
+                <span className="text-slate-900 font-medium">Manager</span>
+              </span>
             </span>
+            <a
+              href="/api/logout"
+              className="font-medium text-slate-500 hover:text-orange-600 transition-colors"
+              title="Sign out"
+            >
+              Sign out
+            </a>
           </div>
         </div>
       </header>
