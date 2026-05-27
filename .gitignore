@@ -27,6 +27,14 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+
+# local sqlite database (Railway uses a mounted volume at /data)
+/data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # vercel
 .vercel
