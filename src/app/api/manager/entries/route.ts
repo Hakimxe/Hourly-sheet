@@ -34,29 +34,29 @@ export async function POST(req: Request) {
   }
   const lockedVal = locked ? 1 : 0;
 
-  const existing = db
-    .prepare(
-      "SELECT * FROM entries WHERE creator_id = ? AND date = ?"
-    )
-    .get(creator_id, date) as Entry | undefined;
+  const existing = (await db
+    .prepare("SELECT * FROM entries WHERE creator_id = ? AND date = ?")
+    .get(creator_id, date)) as Entry | undefined;
 
   if (existing) {
-    db.prepare(
-      "UPDATE entries SET hours = ?, videos = ?, locked = ?, updated_at = datetime('now') WHERE id = ?"
-    ).run(h, v, lockedVal, existing.id);
-    const updated = db
+    await db
+      .prepare(
+        "UPDATE entries SET hours = ?, videos = ?, locked = ?, updated_at = datetime('now') WHERE id = ?"
+      )
+      .run(h, v, lockedVal, existing.id);
+    const updated = (await db
       .prepare("SELECT * FROM entries WHERE id = ?")
-      .get(existing.id) as Entry;
+      .get(existing.id)) as Entry;
     return NextResponse.json(updated);
   }
 
-  const result = db
+  const result = await db
     .prepare(
       "INSERT INTO entries (creator_id, date, hours, videos, locked) VALUES (?, ?, ?, ?, ?)"
     )
     .run(creator_id, date, h, v, lockedVal);
-  const created = db
+  const created = (await db
     .prepare("SELECT * FROM entries WHERE id = ?")
-    .get(result.lastInsertRowid) as Entry;
+    .get(result.lastInsertRowid)) as Entry;
   return NextResponse.json(created, { status: 201 });
 }

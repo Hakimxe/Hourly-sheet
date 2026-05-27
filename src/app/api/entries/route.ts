@@ -31,9 +31,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid videos" }, { status: 400 });
   }
 
-  const creator = db
+  const creator = (await db
     .prepare("SELECT id, status FROM creators WHERE slug = ?")
-    .get(slug) as { id: number; status: string } | undefined;
+    .get(slug)) as { id: number; status: string } | undefined;
   if (!creator) {
     return NextResponse.json({ error: "Creator not found" }, { status: 404 });
   }
@@ -59,11 +59,9 @@ export async function POST(req: Request) {
   }
 
   // If already exists & locked, refuse
-  const existing = db
-    .prepare(
-      "SELECT * FROM entries WHERE creator_id = ? AND date = ?"
-    )
-    .get(creator.id, date) as Entry | undefined;
+  const existing = (await db
+    .prepare("SELECT * FROM entries WHERE creator_id = ? AND date = ?")
+    .get(creator.id, date)) as Entry | undefined;
   if (existing && existing.locked) {
     return NextResponse.json(
       { error: "This entry is locked. Contact your manager to modify it." },
@@ -72,23 +70,25 @@ export async function POST(req: Request) {
   }
 
   if (existing) {
-    db.prepare(
-      "UPDATE entries SET hours = ?, videos = ?, locked = 1, updated_at = datetime('now') WHERE id = ?"
-    ).run(h, v, existing.id);
-    const updated = db
+    await db
+      .prepare(
+        "UPDATE entries SET hours = ?, videos = ?, locked = 1, updated_at = datetime('now') WHERE id = ?"
+      )
+      .run(h, v, existing.id);
+    const updated = (await db
       .prepare("SELECT * FROM entries WHERE id = ?")
-      .get(existing.id) as Entry;
+      .get(existing.id)) as Entry;
     return NextResponse.json(updated);
   }
 
-  const result = db
+  const result = await db
     .prepare(
       "INSERT INTO entries (creator_id, date, hours, videos, locked) VALUES (?, ?, ?, ?, 1)"
     )
     .run(creator.id, date, h, v);
-  const created = db
+  const created = (await db
     .prepare("SELECT * FROM entries WHERE id = ?")
-    .get(result.lastInsertRowid) as Entry;
+    .get(result.lastInsertRowid)) as Entry;
 
   return NextResponse.json(created, { status: 201 });
 }

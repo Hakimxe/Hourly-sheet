@@ -17,9 +17,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const entry = db
+  const entry = (await db
     .prepare("SELECT * FROM entries WHERE id = ?")
-    .get(id) as Entry | undefined;
+    .get(id)) as Entry | undefined;
   if (!entry) {
     return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   }
@@ -51,12 +51,12 @@ export async function PATCH(
   }
   fields.push("updated_at = datetime('now')");
   values.push(id);
-  db.prepare(`UPDATE entries SET ${fields.join(", ")} WHERE id = ?`).run(
-    ...values
-  );
-  const updated = db
+  await db
+    .prepare(`UPDATE entries SET ${fields.join(", ")} WHERE id = ?`)
+    .run(...values);
+  const updated = (await db
     .prepare("SELECT * FROM entries WHERE id = ?")
-    .get(id) as Entry;
+    .get(id)) as Entry;
   return NextResponse.json(updated);
 }
 
@@ -68,6 +68,6 @@ export async function DELETE(
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
-  db.prepare("DELETE FROM entries WHERE id = ?").run(id);
+  await db.prepare("DELETE FROM entries WHERE id = ?").run(id);
   return NextResponse.json({ ok: true });
 }

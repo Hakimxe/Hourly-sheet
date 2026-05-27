@@ -12,9 +12,9 @@ export async function GET(
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  const creator = db
+  const creator = (await db
     .prepare("SELECT * FROM creators WHERE id = ?")
-    .get(id) as Creator | undefined;
+    .get(id)) as Creator | undefined;
   if (!creator) {
     return NextResponse.json({ error: "Creator not found" }, { status: 404 });
   }
@@ -24,15 +24,15 @@ export async function GET(
 
   let entries: Entry[];
   if (month) {
-    entries = db
+    entries = (await db
       .prepare(
         "SELECT * FROM entries WHERE creator_id = ? AND date LIKE ? ORDER BY date ASC"
       )
-      .all(id, `${month}%`) as Entry[];
+      .all(id, `${month}%`)) as Entry[];
   } else {
-    entries = db
+    entries = (await db
       .prepare("SELECT * FROM entries WHERE creator_id = ? ORDER BY date ASC")
-      .all(id) as Entry[];
+      .all(id)) as Entry[];
   }
 
   return NextResponse.json({ creator, entries });
@@ -75,12 +75,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
   values.push(id);
-  db.prepare(`UPDATE creators SET ${fields.join(", ")} WHERE id = ?`).run(
-    ...values
-  );
-  const creator = db
+  await db
+    .prepare(`UPDATE creators SET ${fields.join(", ")} WHERE id = ?`)
+    .run(...values);
+  const creator = (await db
     .prepare("SELECT * FROM creators WHERE id = ?")
-    .get(id) as Creator;
+    .get(id)) as Creator;
   return NextResponse.json(creator);
 }
 
@@ -92,6 +92,6 @@ export async function DELETE(
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
-  db.prepare("DELETE FROM creators WHERE id = ?").run(id);
+  await db.prepare("DELETE FROM creators WHERE id = ?").run(id);
   return NextResponse.json({ ok: true });
 }

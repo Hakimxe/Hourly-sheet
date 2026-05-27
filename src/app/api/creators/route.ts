@@ -43,20 +43,22 @@ export async function GET(req: Request) {
     where.length ? `WHERE ${where.join(" AND ")}` : ""
   } ORDER BY ${order}`;
 
-  const creators = db.prepare(sql).all(...params) as Creator[];
+  const creators = (await db.prepare(sql).all(...params)) as Creator[];
 
-  const withStats = creators.map((c) => {
-    const stats = db
-      .prepare(
-        `SELECT COALESCE(SUM(hours), 0) as total_hours,
-                COALESCE(SUM(videos), 0) as total_videos,
-                COUNT(*) as days
-         FROM entries
-         WHERE creator_id = ?`
-      )
-      .get(c.id) as { total_hours: number; total_videos: number; days: number };
-    return { ...c, ...stats };
-  });
+  const withStats = await Promise.all(
+    creators.map(async (c) => {
+      const stats = (await db
+        .prepare(
+          `SELECT COALESCE(SUM(hours), 0) as total_hours,
+                  COALESCE(SUM(videos), 0) as total_videos,
+                  COUNT(*) as days
+           FROM entries
+           WHERE creator_id = ?`
+        )
+        .get(c.id)) as { total_hours: number; total_videos: number; days: number };
+      return { ...c, ...stats };
+    })
+  );
 
   return NextResponse.json(withStats);
 }
@@ -76,13 +78,14 @@ export async function POST(req: Request) {
   }
 
   const slug = nanoid(12);
-  const stmt = db.prepare(
-    "INSERT INTO creators (name, country, slug, status) VALUES (?, ?, ?, 'active')"
-  );
-  const result = stmt.run(name, country, slug);
-  const creator = db
+  const result = await db
+    .prepare(
+      "INSERT INTO creators (name, country, slug, status) VALUES (?, ?, ?, 'active')"
+    )
+    .run(name, country, slug);
+  const creator = (await db
     .prepare("SELECT * FROM creators WHERE id = ?")
-    .get(result.lastInsertRowid) as Creator;
+    .get(result.lastInsertRowid)) as Creator;
 
   return NextResponse.json(creator, { status: 201 });
 }

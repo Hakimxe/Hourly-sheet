@@ -1,30 +1,39 @@
-import Database from "better-sqlite3";
-import path from "path";
-import fs from "fs";
+import { createClient, type Client, type InValue } from "@libsql/client";
 
-// On Railway/production: set DATA_DIR=/data (the mounted persistent volume).
-// On local dev: defaults to ./data inside the project.
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : path.join(process.cwd(), "data");
-
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-const DB_PATH = path.join(DATA_DIR, "app.db");
+// On Vercel / production: set TURSO_DATABASE_URL=libsql://... and TURSO_AUTH_TOKEN=...
+// On local dev: defaults to a file-backed SQLite db at ./data/app.db
+//   (libsql supports file: URLs natively, so no extra setup needed).
+const url =
+  process.env.TURSO_DATABASE_URL ?? "file:./data/app.db";
+const authToken = process.env.TURSO_AUTH_TOKEN;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __db: Database.Database | undefined;
+  var __client: Client | undefined;
+  // eslint-disable-next-line no-var
+  var __dbInitDone: boolean | undefined;
 }
 
-function createDb(): Database.Database {
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+const client: Client =
+  global.__client ??
+  createClient({
+    url,
+    ...(authToken ? { authToken } : {}),
+  });
 
-  db.exec(`
+if (process.env.NODE_ENV !== "production") {
+  global.__client = client;
+}
+
+// ---------------------------------------------------------------------------
+// Schema bootstrap (idempotent). Run once per process.
+// ---------------------------------------------------------------------------
+async function ensureSchema(): Promise<void> {
+  if (global.__dbInitDone) return;
+
+  // Note: libsql/Turso doesn't support multi-statement exec well via executeMultiple
+  // for our needs; we use individual statements.
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS creators (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -32,8 +41,10 @@ function createDb(): Database.Database {
       slug TEXT NOT NULL UNIQUE,
       status TEXT NOT NULL DEFAULT 'active',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    )
+  `);
 
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       creator_id INTEGER NOT NULL,
@@ -45,29 +56,77 @@ function createDb(): Database.Database {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(creator_id, date),
       FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_entries_creator_date ON entries(creator_id, date);
+    )
   `);
 
-  // Idempotent migration: add `status` to creators if not present
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS idx_entries_creator_date ON entries(creator_id, date)`
+  );
+
+  // Idempotent migration: ensure 'status' column on creators
   try {
-    const cols = db.prepare("PRAGMA table_info(creators)").all() as { name: string }[];
-    if (!cols.some((c) => c.name === "status")) {
-      db.exec("ALTER TABLE creators ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+    const cols = await client.execute(`PRAGMA table_info(creators)`);
+    const hasStatus = cols.rows.some((r) => (r.name as string) === "status");
+    if (!hasStatus) {
+      await client.execute(
+        `ALTER TABLE creators ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`
+      );
     }
   } catch {
     // ignore
   }
 
-  return db;
+  global.__dbInitDone = true;
 }
 
-export const db: Database.Database = global.__db ?? createDb();
-if (process.env.NODE_ENV !== "production") {
-  global.__db = db;
+// ---------------------------------------------------------------------------
+// Compatibility shim so existing route code keeps the
+//    db.prepare(sql).all(...args) / .get(...args) / .run(...args)
+// API surface from better-sqlite3.  All methods are async now.
+// ---------------------------------------------------------------------------
+type Args = (string | number | bigint | null | Uint8Array)[];
+
+function toInValues(args: Args): InValue[] {
+  return args.map((a) => a as InValue);
 }
 
+export interface PreparedStatement<R = Record<string, unknown>> {
+  all: (...args: Args) => Promise<R[]>;
+  get: (...args: Args) => Promise<R | undefined>;
+  run: (...args: Args) => Promise<{ lastInsertRowid: number; changes: number }>;
+}
+
+function prepare<R = Record<string, unknown>>(sql: string): PreparedStatement<R> {
+  return {
+    async all(...args: Args) {
+      await ensureSchema();
+      const res = await client.execute({ sql, args: toInValues(args) });
+      return res.rows as unknown as R[];
+    },
+    async get(...args: Args) {
+      await ensureSchema();
+      const res = await client.execute({ sql, args: toInValues(args) });
+      return (res.rows[0] as unknown as R) ?? undefined;
+    },
+    async run(...args: Args) {
+      await ensureSchema();
+      const res = await client.execute({ sql, args: toInValues(args) });
+      return {
+        lastInsertRowid: Number(res.lastInsertRowid ?? 0),
+        changes: res.rowsAffected,
+      };
+    },
+  };
+}
+
+export const db = {
+  prepare,
+  raw: client,
+};
+
+// ---------------------------------------------------------------------------
+// Types — unchanged from original
+// ---------------------------------------------------------------------------
 export type Creator = {
   id: number;
   name: string;
